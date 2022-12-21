@@ -14,7 +14,9 @@
 #include "esp_adc_cal_types_legacy.h"
 
 #if !CONFIG_ADC_SUPPRESS_DEPRECATE_WARN
-#warning "legacy adc calibration driver is deprecated, please migrate to use esp_adc/adc_cali.h and esp_adc/adc_cali_scheme.h"
+// FIXME: this workaround will require proper care in the future!
+#pragma message "WARNING: legacy adc calibration driver is deprecated, please migrate to use esp_adc/adc_cali.h and esp_adc/adc_cali_scheme.h"
+// #warning "legacy adc calibration driver is deprecated, please migrate to use esp_adc/adc_cali.h and esp_adc/adc_cali_scheme.h"
 #endif
 
 #ifdef __cplusplus
