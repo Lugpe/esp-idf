@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2022 Espressif Systems (Shanghai) CO LTD
+ * SPDX-FileCopyrightText: 2022-2023 Espressif Systems (Shanghai) CO LTD
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -31,6 +31,7 @@
 #include "esp_freertos_hooks.h"
 #include "esp_intr_alloc.h"
 #include "esp_memory_utils.h"
+#include "esp_chip_info.h"
 #if CONFIG_SPIRAM
 /* Required by esp_psram_extram_reserve_dma_pool() */
 #include "esp_psram.h"
@@ -48,6 +49,8 @@
 #include "hal/systimer_hal.h"
 #include "hal/systimer_ll.h"
 #endif // CONFIG_FREERTOS_SYSTICK_USES_SYSTIMER
+
+_Static_assert(portBYTE_ALIGNMENT == 16, "portBYTE_ALIGNMENT must be set to 16");
 
 /*
 OS state variables
@@ -174,6 +177,13 @@ BaseType_t xPortSysTickHandler(void);
 extern void _frxt_tick_timer_init(void);
 extern void _xt_tick_divisor_init(void);
 
+#ifdef CONFIG_FREERTOS_CORETIMER_0
+    #define SYSTICK_INTR_ID (ETS_INTERNAL_TIMER0_INTR_SOURCE+ETS_INTERNAL_INTR_SOURCE_OFF)
+#endif
+#ifdef CONFIG_FREERTOS_CORETIMER_1
+    #define SYSTICK_INTR_ID (ETS_INTERNAL_TIMER1_INTR_SOURCE+ETS_INTERNAL_INTR_SOURCE_OFF)
+#endif
+
 /**
  * @brief Initialize CCONT timer to generate the tick interrupt
  *
@@ -228,7 +238,10 @@ void vPortSetupTimer(void)
         systimer_ll_apply_counter_value(systimer_hal.dev, SYSTIMER_LL_COUNTER_OS_TICK);
 
         for (cpuid = 0; cpuid < SOC_CPU_CORES_NUM; cpuid++) {
+            // Set stall option and alarm mode to default state. Below they will be set to a required state.
             systimer_hal_counter_can_stall_by_cpu(&systimer_hal, SYSTIMER_LL_COUNTER_OS_TICK, cpuid, false);
+            uint32_t alarm_id = SYSTIMER_LL_ALARM_OS_TICK_CORE0 + cpuid;
+            systimer_hal_select_alarm_mode(&systimer_hal, alarm_id, SYSTIMER_ALARM_MODE_ONESHOT);
         }
 
         for (cpuid = 0; cpuid < portNUM_PROCESSORS; ++cpuid) {
@@ -324,7 +337,7 @@ static void main_task(void *args)
 #endif
 
     //Initialize TWDT if configured to do so
-#if CONFIG_ESP_TASK_WDT
+#if CONFIG_ESP_TASK_WDT_INIT
     esp_task_wdt_config_t twdt_config = {
         .timeout_ms = CONFIG_ESP_TASK_WDT_TIMEOUT_S * 1000,
         .idle_core_mask = 0,
@@ -701,6 +714,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
     p[2] = (((uint32_t) p) + 12 + XCHAL_TOTAL_SA_ALIGN - 1) & -XCHAL_TOTAL_SA_ALIGN;
 #endif /* XCHAL_CP_NUM */
 
+    configASSERT(((uint32_t) sp & portBYTE_ALIGNMENT_MASK) == 0);
     return sp;
 }
 

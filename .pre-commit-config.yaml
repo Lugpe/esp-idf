@@ -36,7 +36,7 @@ repos:
       - id: flake8
         args: ['--config=.flake8', '--tee', '--benchmark']
   - repo: https://github.com/pycqa/isort
-    rev: 5.9.3
+    rev: 5.11.5  # python 3.7 compatible
     hooks:
       - id: isort
         name: isort (python)
@@ -157,7 +157,7 @@ repos:
       - id: file-contents-sorter
         files: 'tools\/ci\/(executable-list\.txt|mypy_ignore_list\.txt|check_copyright_ignore\.txt)'
   - repo: https://github.com/espressif/check-copyright/
-    rev: v1.0.1
+    rev: v1.0.2
     hooks:
       - id: check-copyright
         args: ['--ignore', 'tools/ci/check_copyright_ignore.txt', '--config', 'tools/ci/check_copyright_config.yaml']

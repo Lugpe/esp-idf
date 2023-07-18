@@ -10,6 +10,7 @@
 #include "common/ieee802_11_defs.h"
 #include "esp_wifi_driver.h"
 #include "rsn_supp/wpa.h"
+#include <inttypes.h>
 
 static struct sae_pt *g_sae_pt;
 static struct sae_data g_sae_data;
@@ -18,7 +19,7 @@ static struct wpabuf *g_sae_commit = NULL;
 static struct wpabuf *g_sae_confirm = NULL;
 int g_allowed_groups[] = { IANA_SECP256R1, 0 };
 
-static esp_err_t wpa3_build_sae_commit(u8 *bssid)
+static esp_err_t wpa3_build_sae_commit(u8 *bssid, size_t *sae_msg_len)
 {
     int default_group = IANA_SECP256R1;
     u32 len = 0;
@@ -33,6 +34,7 @@ static esp_err_t wpa3_build_sae_commit(u8 *bssid)
 
     if (wpa_sta_cur_pmksa_matches_akm()) {
         wpa_printf(MSG_INFO, "wpa3: Skip SAE and use cached PMK instead");
+        *sae_msg_len = 0;
         return ESP_FAIL;
     }
 
@@ -147,7 +149,12 @@ static u8 *wpa3_build_sae_msg(u8 *bssid, u32 sae_msg_type, size_t *sae_msg_len)
 
     switch (sae_msg_type) {
         case SAE_MSG_COMMIT:
-            if (ESP_OK != wpa3_build_sae_commit(bssid))
+            /* Do not go for SAE when WPS is ongoing */
+            if (esp_wifi_get_wps_status_internal() != WPS_STATUS_DISABLE) {
+                *sae_msg_len = 0;
+                return NULL;
+            }
+            if (ESP_OK != wpa3_build_sae_commit(bssid, sae_msg_len))
                 return NULL;
             *sae_msg_len = wpabuf_len(g_sae_commit);
             buf = wpabuf_mhead_u8(g_sae_commit);
@@ -241,7 +248,7 @@ static int wpa3_parse_sae_msg(u8 *buf, size_t len, u32 sae_msg_type, u16 status)
             esp_wpa3_free_sae_data();
             break;
         default:
-            wpa_printf(MSG_ERROR, "wpa3: Invalid SAE msg type(%d)!", sae_msg_type);
+            wpa_printf(MSG_ERROR, "wpa3: Invalid SAE msg type(%" PRId32 ")!", sae_msg_type);
             ret = ESP_FAIL;
             break;
     }
@@ -255,4 +262,12 @@ void esp_wifi_register_wpa3_cb(struct wpa_funcs *wpa_cb)
     wpa_cb->wpa3_parse_sae_msg = wpa3_parse_sae_msg;
 }
 
+void esp_wifi_unregister_wpa3_cb(void)
+{
+    extern struct wpa_funcs *wpa_cb;
+
+    wpa_cb->wpa3_build_sae_msg = NULL;
+    wpa_cb->wpa3_parse_sae_msg = NULL;
+
+}
 #endif /* CONFIG_WPA3_SAE */

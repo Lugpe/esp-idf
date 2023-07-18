@@ -107,6 +107,7 @@ typedef struct {
     int                    mgmt_sbuf_num;          /**< WiFi management short buffer number, the minimum value is 6, the maximum value is 32 */
     uint64_t               feature_caps;           /**< Enables additional WiFi features and capabilities */
     bool                   sta_disconnected_pm;    /**< WiFi Power Management for station at disconnected status */
+    int                    espnow_max_encrypt_num; /**< Maximum encrypt number of peers supported by espnow */
     int                    magic;                  /**< WiFi init magic number, it should be the last field */
 } wifi_init_config_t;
 
@@ -116,7 +117,7 @@ typedef struct {
 #define WIFI_STATIC_TX_BUFFER_NUM 0
 #endif
 
-#if (CONFIG_ESP32_SPIRAM_SUPPORT || CONFIG_ESP32S2_SPIRAM_SUPPORT || CONFIG_ESP32S3_SPIRAM_SUPPORT)
+#if CONFIG_SPIRAM
 #define WIFI_CACHE_TX_BUFFER_NUM  CONFIG_ESP32_WIFI_CACHE_TX_BUFFER_NUM
 #else
 #define WIFI_CACHE_TX_BUFFER_NUM  0
@@ -225,6 +226,7 @@ extern uint64_t g_wifi_feature_caps;
     .mgmt_sbuf_num = WIFI_MGMT_SBUF_NUM, \
     .feature_caps = g_wifi_feature_caps, \
     .sta_disconnected_pm = WIFI_STA_DISCONNECTED_PM_ENABLED,  \
+    .espnow_max_encrypt_num = CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM, \
     .magic = WIFI_INIT_CONFIG_MAGIC\
 }
 
@@ -580,6 +582,8 @@ esp_err_t esp_wifi_get_bandwidth(wifi_interface_t ifx, wifi_bandwidth_t *bw);
   * @attention 2. When ESP32 is in STA mode, this API should not be called when STA is scanning or connecting to an external AP
   * @attention 3. When ESP32 is in softAP mode, this API should not be called when softAP has connected to external STAs
   * @attention 4. When ESP32 is in STA+softAP mode, this API should not be called when in the scenarios described above
+  * @attention 5. The channel info set by this API will not be stored in NVS. So If you want to remeber the channel used before wifi stop,
+  *               you need to call this API again after wifi start, or you can call `esp_wifi_set_config()` to store the channel info in NVS.
   *
   * @param     primary  for HT20, primary is the channel number, for HT40, primary is the primary channel
   * @param     second   for HT20, second is ignored, for HT40, second is the second channel
@@ -789,6 +793,7 @@ esp_err_t esp_wifi_get_promiscuous_ctrl_filter(wifi_promiscuous_filter_t *filter
   * @attention 2. For station configuration, bssid_set needs to be 0; and it needs to be 1 only when users need to check the MAC address of the AP.
   * @attention 3. ESP32 is limited to only one channel, so when in the soft-AP+station mode, the soft-AP will adjust its channel automatically to be the same as
   *               the channel of the ESP32 station.
+  * @attention 4. The configuration will be stored in NVS
   *
   * @param     interface  interface
   * @param     conf  station or soft-AP configuration
@@ -1141,6 +1146,7 @@ esp_err_t esp_wifi_set_inactive_time(wifi_interface_t ifx, uint16_t sec);
   * @return
   *    - ESP_OK: succeed
   *    - ESP_ERR_WIFI_NOT_INIT: WiFi is not initialized by esp_wifi_init
+  *    - ESP_ERR_WIFI_NOT_STARTED: WiFi is not started by esp_wifi_start
   *    - ESP_ERR_WIFI_ARG: invalid argument
   */
 esp_err_t esp_wifi_get_inactive_time(wifi_interface_t ifx, uint16_t *sec);
@@ -1174,7 +1180,9 @@ esp_err_t esp_wifi_set_rssi_threshold(int32_t rssi);
   * @brief      Start an FTM Initiator session by sending FTM request
   *             If successful, event WIFI_EVENT_FTM_REPORT is generated with the result of the FTM procedure
   *
-  * @attention  Use this API only in Station mode
+  * @attention  1. Use this API only in Station mode.
+  * @attention  2. If FTM is initiated on a different channel than Station is connected in or internal SoftAP is started in,
+  *                FTM defaults to a single burst in ASAP mode.
   *
   * @param      cfg  FTM Initiator session configuration
   *
@@ -1224,6 +1232,7 @@ esp_err_t esp_wifi_ftm_resp_set_offset(int16_t offset_cm);
   */
 esp_err_t esp_wifi_config_11b_rate(wifi_interface_t ifx, bool disable);
 
+#define ESP_WIFI_CONNECTIONLESS_INTERVAL_DEFAULT_MODE 0
 /**
   * @brief      Set wake interval for connectionless modules to wake up periodically.
   *
@@ -1232,6 +1241,7 @@ esp_err_t esp_wifi_config_11b_rate(wifi_interface_t ifx, bool disable);
   *               When ESP_WIFI_STA_DISCONNECTED_PM_ENABLE is enabled, this configuration could work at disconnected status.
   * @attention 3. Event WIFI_EVENT_CONNECTIONLESS_MODULE_WAKE_INTERVAL_START would be posted each time wake interval starts.
   * @attention 4. Recommend to configure interval in multiples of hundred. (e.g. 100ms)
+  * @attention 5. Recommend to configure interval to ESP_WIFI_CONNECTIONLESS_INTERVAL_DEFAULT_MODE to get stable performance at coexistence mode.
   *
   * @param      wake_interval  Milliseconds after would the chip wake up, from 1 to 65535.
   */
@@ -1310,6 +1320,29 @@ esp_err_t esp_wifi_config_80211_tx_rate(wifi_interface_t ifx, wifi_phy_rate_t ra
   */
 esp_err_t esp_wifi_disable_pmf_config(wifi_interface_t ifx);
 
+/**
+  * @brief     Get the Association id assigned to STA by AP
+  *
+  * @param[out] aid  store the aid
+  *
+  * @attention aid = 0 if station is not connected to AP.
+  *
+  * @return
+  *    - ESP_OK: succeed
+  */
+esp_err_t esp_wifi_sta_get_aid(uint16_t *aid);
+
+/**
+  * @brief     Get the negotiated phymode after connection.
+  *
+  * @param[out] phymode  store the negotiated phymode.
+  *
+  * @attention Operation phy mode, BIT[5]: indicate whether LR enabled, BIT[0-4]: wifi_phy_mode_t
+  *
+  * @return
+  *    - ESP_OK: succeed
+  */
+esp_err_t esp_wifi_sta_get_negotiated_phymode(wifi_phy_mode_t *phymode);
 #ifdef __cplusplus
 }
 #endif
