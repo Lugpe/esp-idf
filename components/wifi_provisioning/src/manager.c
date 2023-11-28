@@ -25,6 +25,11 @@
 
 #include "wifi_provisioning_priv.h"
 
+#ifdef LOG_LOCAL_LEVEL
+    #undef LOG_LOCAL_LEVEL
+    #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+#endif
+
 #define WIFI_PROV_MGR_VERSION      "v1.1"
 #define WIFI_PROV_STORAGE_BIT       BIT0
 #define WIFI_PROV_SETTING_BIT       BIT1
@@ -590,7 +595,7 @@ static void prov_stop_and_notify(bool is_async)
 
     /* Switch device to Wi-Fi STA mode irrespective of
      * whether provisioning was completed or not */
-    esp_wifi_set_mode(WIFI_MODE_STA);
+    esp_wifi_set_mode(WIFI_MODE_APSTA);
     ESP_LOGI(TAG, "Provisioning stopped");
 
     if (is_async) {
@@ -975,6 +980,7 @@ static void wifi_prov_mgr_event_handler_internal(
             /* If none of the expected reasons,
              * retry connecting to host SSID */
             prov_ctx->wifi_state = WIFI_PROV_STA_CONNECTING;
+            // esp_wifi_disconnect();
             esp_wifi_connect();
         }
 
@@ -1043,8 +1049,11 @@ esp_err_t wifi_prov_mgr_wifi_scan_start(bool blocking, bool passive,
         prov_ctx->scan_cfg.channel = 0;
     }
 
-    if (esp_wifi_scan_start(&prov_ctx->scan_cfg, false) != ESP_OK) {
+    esp_err_t scan_start_status = esp_wifi_scan_start(&prov_ctx->scan_cfg, false);
+
+    if (scan_start_status != ESP_OK) {
         ESP_LOGE(TAG, "Failed to start scan");
+        ESP_ERROR_CHECK_WITHOUT_ABORT(scan_start_status);
         RELEASE_LOCK(prov_ctx_lock);
         return ESP_FAIL;
     }
@@ -1216,6 +1225,7 @@ esp_err_t wifi_prov_mgr_is_provisioned(bool *provisioned)
 
 static void wifi_connect_timer_cb(void *arg)
 {
+    // esp_wifi_disconnect();
     if (esp_wifi_connect() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to connect Wi-Fi");
     }
@@ -1242,7 +1252,7 @@ esp_err_t wifi_prov_mgr_configure_sta(wifi_config_t *wifi_cfg)
     debug_print_wifi_credentials(wifi_cfg->sta, "Received");
 
     /* Configure Wi-Fi as both AP and/or Station */
-    if (esp_wifi_set_mode(prov_ctx->mgr_config.scheme.wifi_mode) != ESP_OK) {
+    if (esp_wifi_set_mode(WIFI_MODE_APSTA) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set Wi-Fi mode");
         RELEASE_LOCK(prov_ctx_lock);
         return ESP_FAIL;
@@ -1526,7 +1536,7 @@ esp_err_t wifi_prov_mgr_start_provisioning(wifi_prov_security_t security, const 
 
     /* Start Wi-Fi in Station Mode.
      * This is necessary for scanning to work */
-    ret = esp_wifi_set_mode(WIFI_MODE_STA);
+    ret = esp_wifi_set_mode(WIFI_MODE_APSTA);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set Wi-Fi mode to STA");
         goto err;
@@ -1563,11 +1573,11 @@ esp_err_t wifi_prov_mgr_start_provisioning(wifi_prov_security_t security, const 
     /* WiFi settings needs to be restored if provisioning error before exiting this API */
     restore_wifi_flag |= WIFI_PROV_SETTING_BIT;
 
-    ret = esp_wifi_disconnect();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to disconnect");
-        goto err;
-    }
+        ret = esp_wifi_disconnect();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to disconnect");
+            goto err;
+        }
 
 #ifdef CONFIG_ESP_PROTOCOMM_SUPPORT_SECURITY_VERSION_0
     /* Initialize app data */
@@ -1779,11 +1789,11 @@ esp_err_t wifi_prov_mgr_reset_sm_state_for_reprovision(void)
         goto exit;
     }
 
-    ret = esp_wifi_disconnect();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to disconnect wifi, 0x%x", ret);
-        goto exit;
-    }
+        ret = esp_wifi_disconnect();
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to disconnect wifi, 0x%x", ret);
+            goto exit;
+        }
 
     prov_ctx->prov_state = WIFI_PROV_STATE_STARTED;
     execute_event_cb(WIFI_PROV_START, NULL, 0);
