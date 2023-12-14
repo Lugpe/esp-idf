@@ -408,15 +408,15 @@ static const struct osi_funcs_t osi_funcs_ro = {
 /* the mode column will be modified by release function to indicate the available region */
 static btdm_dram_available_region_t btdm_dram_available_region[] = {
     //following is .data
-    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_DATA_START,      SOC_MEM_BT_DATA_END         },
+    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_DATA_START,      SOC_MEM_BT_DATA_END         },  // 6192  bytes
     //following is memory which HW will use
-    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_EM_BTDM0_START,  SOC_MEM_BT_EM_BTDM0_END     },
-    {ESP_BT_MODE_BLE,           SOC_MEM_BT_EM_BLE_START,    SOC_MEM_BT_EM_BLE_END      },
-    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_EM_BTDM1_START,  SOC_MEM_BT_EM_BTDM1_END     },
-    {ESP_BT_MODE_CLASSIC_BT,    SOC_MEM_BT_EM_BREDR_START,  SOC_MEM_BT_EM_BREDR_REAL_END},
+    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_EM_BTDM0_START,  SOC_MEM_BT_EM_BTDM0_END     },  // 2472  bytes
+    {ESP_BT_MODE_BLE,           SOC_MEM_BT_EM_BLE_START,    SOC_MEM_BT_EM_BLE_END      },   // 5172  bytes
+    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_EM_BTDM1_START,  SOC_MEM_BT_EM_BTDM1_END     },  // 2388  bytes
+    {ESP_BT_MODE_CLASSIC_BT,    SOC_MEM_BT_EM_BREDR_START,  SOC_MEM_BT_EM_BREDR_REAL_END},  // 17836 bytes
     //following is .bss
-    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_BSS_START,       SOC_MEM_BT_BSS_END          },
-    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_MISC_START,      SOC_MEM_BT_MISC_END         },
+    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_BSS_START,       SOC_MEM_BT_BSS_END          },  // 6688 bytes
+    {ESP_BT_MODE_BTDM,          SOC_MEM_BT_MISC_START,      SOC_MEM_BT_MISC_END         },  // 52   bytes
 };
 
 /* Reserve the full memory region used by Bluetooth Controller,
@@ -1279,7 +1279,12 @@ static esp_err_t try_heap_caps_add_region(intptr_t start, intptr_t end)
      * is too small to fit a heap. This cannot be termed as a fatal error and hence
      * we replace it by ESP_OK
      */
+    static int64_t total = 0;
+    int diff = end - start;
+    total += diff;
+    printf("Reclaiming %i bytes (%li so far)\n", diff, total);
     if (ret == ESP_ERR_INVALID_SIZE) {
+        printf("ESP_ERR_INVALID_SIZE\n");
         return ESP_OK;
     }
     return ret;
@@ -1291,11 +1296,13 @@ esp_err_t esp_bt_controller_mem_release(esp_bt_mode_t mode)
     intptr_t mem_start=(intptr_t) NULL, mem_end=(intptr_t) NULL;
 
     if (btdm_controller_status != ESP_BT_CONTROLLER_STATUS_IDLE) {
+        printf("btdm_controller_status != ESP_BT_CONTROLLER_STATUS_IDLE\n");
         return ESP_ERR_INVALID_STATE;
     }
 
     //already released
     if (!(mode & btdm_dram_available_region[0].mode)) {
+        printf("Already released!\n");
         return ESP_ERR_INVALID_STATE;
     }
 

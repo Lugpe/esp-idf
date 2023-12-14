@@ -206,7 +206,7 @@ void wifi_prov_scheme_ble_event_cb_free_btdm(void *user_data, wifi_prov_cb_event
             /* Release BT memory, as we need only BLE */
             err = esp_bt_mem_release(ESP_BT_MODE_CLASSIC_BT);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "bt_mem_release of classic BT failed %d", err);
+                ESP_LOGE(TAG, "bt_mem_release of classic BT failed: %s", esp_err_to_name(err));
             } else {
                 ESP_LOGI(TAG, "BT memory released");
             }
@@ -242,7 +242,7 @@ void wifi_prov_scheme_ble_event_cb_free_bt(void *user_data, wifi_prov_cb_event_t
             /* Release BT memory, as we need only BLE */
             err = esp_bt_mem_release(ESP_BT_MODE_CLASSIC_BT);
             if (err != ESP_OK) {
-                ESP_LOGE(TAG, "bt_mem_release of classic BT failed %d", err);
+                ESP_LOGE(TAG, "bt_mem_release of classic BT failed: %s", esp_err_to_name(err));
             } else {
                 ESP_LOGI(TAG, "BT memory released");
             }
